@@ -1,5 +1,7 @@
 {
   "name": "P3SignLanguage",
-  "integrations": {},
+  "integrations": {
+    "cordova": {}
+  },
   "type": "angular"
 }
