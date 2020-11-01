@@ -10,10 +10,10 @@ import { FilePath } from '@ionic-native/file-path/ngx';
 import { finalize } from 'rxjs/operators';
 
 import { Marvin, MarvinImage } from 'marvin';
-import { Filter, GrayScaleFilter } from './filter';
-import { Base64 } from '@ionic-native/base64/ngx';
 
 import { Device } from '@ionic-native/device/ngx';
+
+import * as tf from '@tensorflow/tfjs';
 
 const STORAGE_KEY = 'my_images';
 
@@ -26,9 +26,10 @@ export class HomePage implements OnInit {
 
   images = [];
 
-  filters: Filter[] = [];  // filters to bind in the list
   workImg: MarvinImage;
   outputImg: MarvinImage;
+
+  model: any;
 
   constructor(
     private camera: Camera, 
@@ -49,11 +50,8 @@ export class HomePage implements OnInit {
     this.plt.ready().then(() => {
       this.loadStoredImages();
     });
-    this.setupFilters();
-  }
-
-  setupFilters(){
-    this.filters.push(new GrayScaleFilter("GrayScale"));
+    this.model = tf.loadLayersModel('./assets/model.json');
+    //console.log(this.model.summary());
   }
 
   loadStoredImages() {
@@ -128,7 +126,7 @@ export class HomePage implements OnInit {
                     this.copyFileToLocalDir(correctPath, currentName, this.createFileName());
                 });
         } else if (this.device.platform == "browser"){
-            console.log("Platform: Browser");
+//            console.log("Platform: Browser");
             this.copyFileToLocalDirBrowser(imagePath, this.createFileName());
         } else {
             var currentName = imagePath.substr(imagePath.lastIndexOf('/') + 1);
@@ -154,9 +152,9 @@ export class HomePage implements OnInit {
   }
 
   copyFileToLocalDirBrowser(imageData, newFileName) {
-    console.log("imageData: " + imageData);
-    console.log("newFileName: " + newFileName);
-    console.log(imageData.slice(0,23));
+//    console.log("imageData: " + imageData);
+//    console.log("newFileName: " + newFileName);
+//    console.log(imageData.slice(0,23));
     if (imageData.slice(0,23) != 'data:image/jpeg;base64,'){
 	imageData = 'data:image/jpeg;base64,' + imageData
     }
@@ -229,28 +227,45 @@ export class HomePage implements OnInit {
     const loading = await this.loadingController.create({
         message: 'processing image...',
     });
-    await loading.present();
+//    await loading.present();
+    this.model = await tf.loadLayersModel('./assets/model.json');
+//    console.log(this.model.summary());
     this.loadImage(imgEntry.path);
-    console.log(this.workImg.image.src);
-    console.log(this.workImg.image.width);
-    console.log(this.workImg.image.height);
     this.callbackImageLoaded(this.workImg);
-    console.log(this.workImg.canvas.width);
-    console.log(this.workImg.canvas.height);
-    console.log(this.workImg);
-    this.outputImg = this.workImg.clone();
+//    console.log(this.workImg);
+    this.outputImg = new MarvinImage();
+    this.create(this.outputImg,this.workImg.canvas.width,this.workImg.canvas.height);
+    Marvin.grayScale(this.workImg, this.outputImg);
     this.outputImg.canvas.getContext("2d").putImageData(this.outputImg.imageData, 0,0);
-    this.filters[0].applyFilter(this.workImg, this.outputImg);
+    this.workImg = this.outputImg;
+    this.outputImg = new MarvinImage();
+    this.create(this.outputImg,28,28);
+    this.Scale(this.workImg,this.outputImg,28,28)
     this.outputImg.canvas.getContext("2d").putImageData(this.outputImg.imageData, 0,0);
-    console.log(this.outputImg);
+//    console.log(this.outputImg);
+    
+    let imageData = this.outputImg.ctx.getImageData(0, 0, 28, 28);
+    // Convert the canvas pixels to 
+    let img1 = tf.browser.fromPixels(imageData, 1);
+    img1 = img1.reshape([1, 28, 28, 1]);
+    img1 = tf.cast(img1, 'float32');
+
+    const output = this.model.predict(img1) as any;
+    // Make and format the predications
+//    console.log(output);
+    const outputArray = Array.from(output.dataSync());
+//    console.log(outputArray);
+//    console.log(outputArray.indexOf(1));
+    this.presentToast('The image is the letter: ' + String.fromCharCode(outputArray.indexOf(1)+65));
+    
     let img = this.outputImg.canvas.toDataURL('image/jpeg', 1.0);
-    console.log(img);
     
     if (this.device.platform == "browser"){
-        console.log("Platform: Browser");
-        this.copyFileToLocalDirBrowser(img, this.createFileName());
+        this.copyFileToLocalDirBrowser(img, outputArray.indexOf(1) + "-" + String.fromCharCode(outputArray.indexOf(1)+65) + "-" + this.createFileName());
     } else {
-	loading.dismiss();
+        var currentName = imgEntry.filePath.substr(imgEntry.filePath.lastIndexOf('/') + 1);
+	var correctPath = imgEntry.filePath.substr(0, imgEntry.filePath.lastIndexOf('/') + 1);
+	this.copyFileToLocalDir(correctPath, currentName, outputArray.indexOf(1)+"-"+String.fromCharCode(outputArray.indexOf(1)+65) + "-" + this.createFileName());
 	this.file.resolveLocalFilesystemUrl(imgEntry.filePath)
 	    .then(entry => {
 		( < FileEntry > entry).file(file => this.readFile(file))
@@ -259,7 +274,7 @@ export class HomePage implements OnInit {
 		this.presentToast('Error while reading file.');
 	    });
     }
-    loading.dismiss();
+    //loading.dismiss();
 
 
   }
@@ -330,6 +345,34 @@ export class HomePage implements OnInit {
     }
   }
 
+  Scale(imgin,imgout,newWidth,newHeight){
+    let width = imgin.getWidth();
+    let height = imgin.getHeight();
 
+    if(imgout.getWidth() != newWidth || imgout.getHeight() != newHeight){
+      imgout.setDimension(newWidth, newHeight);
+    }
+
+    var x_ratio = Math.floor((width<<16)/newWidth) ;
+    var y_ratio = Math.floor((height<<16)/newHeight) ;
+    var x2, y2 ;
+    for (var i=0;i<newHeight;i++) {
+      for (var j=0;j<newWidth;j++) {
+        x2 = Math.floor((j*x_ratio)>>16) ;
+        y2 = Math.floor((i*y_ratio)>>16) ;
+        imgout.setIntColor(j,i, imgin.getAlphaComponent(x2,y2), imgin.getIntColor(x2,y2));
+      }
+    }
+  }
+  
+  create(marvinImage, width, height){
+    marvinImage.canvas = document.createElement('canvas');
+    marvinImage.canvas.width = width;
+    marvinImage.canvas.height = height;
+    marvinImage.ctx = marvinImage.canvas.getContext("2d");
+    marvinImage.imageData = marvinImage.ctx.getImageData(0, 0, width, height);
+    marvinImage.width = width;
+    marvinImage.height = height;
+  }
 
 }

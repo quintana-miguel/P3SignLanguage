@@ -19,9 +19,6 @@ import { FilePath } from '@ionic-native/file-path/ngx';
  
 import { IonicStorageModule } from '@ionic/storage';
 
-import { Marvin, MarvinImage } from 'marvin';
-import { Base64 } from '@ionic-native/base64/ngx';
-
 import { Device } from '@ionic-native/device/ngx';
 
 @NgModule({
@@ -39,7 +36,6 @@ import { Device } from '@ionic-native/device/ngx';
     File,
     WebView,
     FilePath,
-    Base64,
     Device
   ],
   bootstrap: [AppComponent]
