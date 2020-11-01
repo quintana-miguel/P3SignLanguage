@@ -228,9 +228,21 @@ export class HomePage implements OnInit {
         message: 'processing image...',
     });
 //    await loading.present();
+
     this.model = await tf.loadLayersModel('./assets/model.json');
 //    console.log(this.model.summary());
-    this.loadImage(imgEntry.path);
+
+    if (this.device.platform == "browser"){
+      this.loadImage(imgEntry.path); 
+    }else {
+      // Convert image
+      this.getFileContentAsBase64(imgEntry.path,function(base64Image){
+      //window.open(base64Image);
+      this.presentToast(base64Image);
+      this.loadImage(base64Image);  
+      // Then you'll be able to handle the myimage.png file as base64
+      });
+    }
     this.callbackImageLoaded(this.workImg);
 //    console.log(this.workImg);
     this.outputImg = new MarvinImage();
@@ -287,7 +299,7 @@ export class HomePage implements OnInit {
             type: file.type
         });
         formData.append('file', imgBlob, file.name);
-        this.uploadImageData(formData);
+//        this.uploadImageData(formData);
     };
     reader.readAsArrayBuffer(file);
   }
@@ -373,6 +385,25 @@ export class HomePage implements OnInit {
     marvinImage.imageData = marvinImage.ctx.getImageData(0, 0, width, height);
     marvinImage.width = width;
     marvinImage.height = height;
+  }
+  
+  getFileContentAsBase64(path,callback){
+    this.file.resolveLocalFilesystemUrl(path)
+      .then(entry => {
+        ( < FileEntry > entry).file(file => {return this.readFileAsDataURL(file)})
+      })
+      .catch(err => {
+        this.presentToast('Error while reading file.');
+      });
+
+  }
+
+  readFileAsDataURL(file: any) {
+    const reader = new FileReader();
+    reader.onload = () => {
+	return reader.result;
+    };
+    reader.readAsDataURL(file);
   }
 
 }
