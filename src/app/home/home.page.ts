@@ -236,7 +236,7 @@ export class HomePage implements OnInit {
       this.loadImage(imgEntry.path); 
     }else {
       // Convert image
-      this.getFileContentAsBase64(imgEntry.path,function(base64Image){
+      this.getFileContentAsBase64(imgEntry.filePath,function(base64Image){
       //window.open(base64Image);
       this.presentToast(base64Image);
       this.loadImage(base64Image);  
