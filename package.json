@@ -19,8 +19,10 @@
     "@angular/platform-browser": "~10.0.0",
     "@angular/platform-browser-dynamic": "~10.0.0",
     "@angular/router": "~10.0.0",
+    "@ionic-native/base64": "^5.29.0",
     "@ionic-native/camera": "^5.29.0",
     "@ionic-native/core": "^5.0.0",
+    "@ionic-native/device": "^5.29.0",
     "@ionic-native/file": "^5.29.0",
     "@ionic-native/file-path": "^5.29.0",
     "@ionic-native/ionic-webview": "^5.29.0",
@@ -28,6 +30,7 @@
     "@ionic-native/status-bar": "^5.0.0",
     "@ionic/angular": "^5.0.0",
     "@ionic/storage": "^2.3.1",
+    "marvin": "file:marvin",
     "node-gyp": "^7.1.2",
     "rxjs": "~6.5.5",
     "tslib": "^2.0.0",
@@ -44,6 +47,7 @@
     "@types/jasminewd2": "~2.0.3",
     "@types/node": "^12.11.1",
     "codelyzer": "^6.0.0",
+    "com-badrit-base64": "^0.2.0",
     "cordova-android": "^9.0.0",
     "cordova-browser": "^6.0.0",
     "cordova-ios": "^6.1.1",
@@ -81,12 +85,13 @@
       "cordova-plugin-statusbar": {},
       "cordova-plugin-device": {},
       "cordova-plugin-splashscreen": {},
-      "cordova-plugin-ionic-keyboard": {}
+      "cordova-plugin-ionic-keyboard": {},
+      "com-badrit-base64": {}
     },
     "platforms": [
-      "ios",
       "android",
-      "browser"
+      "browser",
+      "ios"
     ]
   }
 }

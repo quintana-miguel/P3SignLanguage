@@ -9,6 +9,12 @@ import { FilePath } from '@ionic-native/file-path/ngx';
 
 import { finalize } from 'rxjs/operators';
 
+import { Marvin, MarvinImage } from 'marvin';
+import { Filter, GrayScaleFilter } from './filter';
+import { Base64 } from '@ionic-native/base64/ngx';
+
+import { Device } from '@ionic-native/device/ngx';
+
 const STORAGE_KEY = 'my_images';
 
 @Component({
@@ -19,6 +25,10 @@ const STORAGE_KEY = 'my_images';
 export class HomePage implements OnInit {
 
   images = [];
+
+  filters: Filter[] = [];  // filters to bind in the list
+  workImg: MarvinImage;
+  outputImg: MarvinImage;
 
   constructor(
     private camera: Camera, 
@@ -31,13 +41,19 @@ export class HomePage implements OnInit {
     private plt: Platform, 
     private loadingController: LoadingController,
     private ref: ChangeDetectorRef, 
-    private filePath: FilePath
+    private filePath: FilePath,
+    private device: Device
   ) {}
 
   ngOnInit() {
     this.plt.ready().then(() => {
       this.loadStoredImages();
     });
+    this.setupFilters();
+  }
+
+  setupFilters(){
+    this.filters.push(new GrayScaleFilter("GrayScale"));
   }
 
   loadStoredImages() {
@@ -111,6 +127,9 @@ export class HomePage implements OnInit {
                     let currentName = imagePath.substring(imagePath.lastIndexOf('/') + 1, imagePath.lastIndexOf('?'));
                     this.copyFileToLocalDir(correctPath, currentName, this.createFileName());
                 });
+        } else if (this.device.platform == "browser"){
+            console.log("Platform: Browser");
+            this.copyFileToLocalDirBrowser(imagePath, this.createFileName());
         } else {
             var currentName = imagePath.substr(imagePath.lastIndexOf('/') + 1);
             var correctPath = imagePath.substr(0, imagePath.lastIndexOf('/') + 1);
@@ -131,6 +150,37 @@ export class HomePage implements OnInit {
         this.updateStoredImages(newFileName);
     }, error => {
         this.presentToast('Error while storing file.');
+    });
+  }
+
+  copyFileToLocalDirBrowser(imageData, newFileName) {
+    console.log("imageData: " + imageData);
+    console.log("newFileName: " + newFileName);
+    console.log(imageData.slice(0,23));
+    if (imageData.slice(0,23) != 'data:image/jpeg;base64,'){
+	imageData = 'data:image/jpeg;base64,' + imageData
+    }
+    this.storage.get(STORAGE_KEY).then(images => {
+	let arr = JSON.parse(images);
+	if (!arr) {
+	    let newImages = [newFileName];
+	    this.storage.set(STORAGE_KEY, JSON.stringify(newImages));
+	} else {
+	    arr.push(name);
+	    this.storage.set(STORAGE_KEY, JSON.stringify(arr));
+	}
+
+	let filePath = undefined;
+	let resPath = imageData;
+
+	let newEntry = {
+	    name: newFileName,
+	    path: resPath,
+	    filePath: filePath
+	};
+
+	this.images = [newEntry, ...this.images];
+	this.ref.detectChanges(); // trigger change detection cycle
     });
   }
 
@@ -175,16 +225,45 @@ export class HomePage implements OnInit {
     });
   }
 
-  startUpload(imgEntry) {
-    this.file.resolveLocalFilesystemUrl(imgEntry.filePath)
-        .then(entry => {
-            ( < FileEntry > entry).file(file => this.readFile(file))
-        })
-        .catch(err => {
-            this.presentToast('Error while reading file.');
-        });
-  }
+  async startUpload(imgEntry) {
+    const loading = await this.loadingController.create({
+        message: 'processing image...',
+    });
+    await loading.present();
+    this.loadImage(imgEntry.path);
+    console.log(this.workImg.image.src);
+    console.log(this.workImg.image.width);
+    console.log(this.workImg.image.height);
+    this.callbackImageLoaded(this.workImg);
+    console.log(this.workImg.canvas.width);
+    console.log(this.workImg.canvas.height);
+    console.log(this.workImg);
+    this.outputImg = this.workImg.clone();
+    this.outputImg.canvas.getContext("2d").putImageData(this.outputImg.imageData, 0,0);
+    this.filters[0].applyFilter(this.workImg, this.outputImg);
+    this.outputImg.canvas.getContext("2d").putImageData(this.outputImg.imageData, 0,0);
+    console.log(this.outputImg);
+    let img = this.outputImg.canvas.toDataURL('image/jpeg', 1.0);
+    console.log(img);
+    
+    if (this.device.platform == "browser"){
+        console.log("Platform: Browser");
+        this.copyFileToLocalDirBrowser(img, this.createFileName());
+    } else {
+	loading.dismiss();
+	this.file.resolveLocalFilesystemUrl(imgEntry.filePath)
+	    .then(entry => {
+		( < FileEntry > entry).file(file => this.readFile(file))
+	    })
+	    .catch(err => {
+		this.presentToast('Error while reading file.');
+	    });
+    }
+    loading.dismiss();
 
+
+  }
+  
   readFile(file: any) {
     const reader = new FileReader();
     reader.onload = () => {
@@ -200,7 +279,7 @@ export class HomePage implements OnInit {
 
   async uploadImageData(formData: FormData) {
     const loading = await this.loadingController.create({
-        message: 'Uploading image...',
+        message: 'uploading image...',
     });
     await loading.present();
 
@@ -217,6 +296,40 @@ export class HomePage implements OnInit {
 //                this.presentToast('File upload failed.')
 //            }
 //        });
+    loading.dismiss();
   }
+
+  refreshCanvas(image: MarvinImage) {
+    image.draw(document.getElementById("canvas"));
+  }
+
+  loadImage(imageSrc){
+    this.workImg = new MarvinImage();
+    this.workImg.load(imageSrc, function(){
+      //self.refreshCanvas(this);
+      // create an empty MarvinImage with the same dimesions of the originalImg
+      //this.outputImg = new MarvinImage(this.getWidth(), this.getHeight());
+    });
+  }
+
+  callbackImageLoaded(marvinImage){
+    marvinImage.width = marvinImage.image.width;
+    marvinImage.height = marvinImage.image.height;
+    marvinImage.canvas = document.createElement('canvas');
+    marvinImage.canvas.width = marvinImage.image.width;
+    marvinImage.canvas.height = marvinImage.image.height;
+
+
+    marvinImage.ctx = marvinImage.canvas.getContext("2d");
+    marvinImage.ctx.drawImage(marvinImage.image, 0, 0);
+
+    marvinImage.imageData = marvinImage.ctx.getImageData(0, 0, marvinImage.getWidth(), marvinImage.getHeight());
+
+    if(marvinImage.onload!=null){
+      marvinImage.onload();
+    }
+  }
+
+
 
 }
